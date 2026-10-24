@@ -1,0 +1,30 @@
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# JavaScript dependencies and builds
+node_modules/
+dist/
+build/
+
+# Generated application data
+data/uploads/
+data/parsed/
+data/qdrant/
+
+# Local databases and logs
+*.log
+*.sqlite
+*.db
+
+# Editor and operating system files
+.DS_Store
+Thumbs.db
