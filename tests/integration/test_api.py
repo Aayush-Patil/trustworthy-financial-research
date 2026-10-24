@@ -90,18 +90,18 @@ def test_create_run_upload_mode_missing_documents():
 
 
 def test_get_run_status_seeded():
-    """GET /api/runs/run_001 returns seeded mock run status."""
+    """GET /api/runs/run_001 returns seeded mock run status consistent with mock result."""
     response = client.get("/api/runs/run_001")
     assert response.status_code == 200
     data = response.json()
     assert data["run_id"] == "run_001"
-    assert data["status"] == "running"
-    assert data["current_stage"] == "retrieval"
+    assert data["status"] == "completed_with_warnings"
+    assert data["current_stage"] == "completed"
     assert isinstance(data["warnings"], list)
 
 
 def test_get_run_status_newly_created():
-    """GET /api/runs/{run_id} returns status for newly created run."""
+    """GET /api/runs/{run_id} returns status consistent with immediately available mock result."""
     create_resp = client.post(
         "/api/runs",
         json={
@@ -116,7 +116,7 @@ def test_get_run_status_newly_created():
     assert status_resp.status_code == 200
     status_data = status_resp.json()
     assert status_data["run_id"] == run_id
-    assert status_data["status"] == "queued"
+    assert status_data["status"] == "completed_with_warnings"
 
 
 def test_get_run_status_not_found():
@@ -149,3 +149,49 @@ def test_get_run_result_not_found():
     """GET /api/runs/{unknown_id}/result returns 404."""
     response = client.get("/api/runs/nonexistent_run_9999/result")
     assert response.status_code == 404
+
+
+def test_mock_run_consistency_and_unverified_calculations():
+    """Ensure run status matches research result status, and mock calculation/judges are unverified."""
+    create_resp = client.post(
+        "/api/runs",
+        json={
+            "company_name": "Integrity Corp",
+            "question": "Verify debt to equity ratio.",
+        },
+    )
+    assert create_resp.status_code == 200
+    run_id = create_resp.json()["run_id"]
+
+    status_data = client.get(f"/api/runs/{run_id}").json()
+    result_data = client.get(f"/api/runs/{run_id}/result").json()
+
+    # 1. Run status and Result status consistency
+    assert status_data["status"] == result_data["status"]
+    assert status_data["status"] == "completed_with_warnings"
+
+    # 2. Mock calculations are NOT marked as verified
+    calcs = result_data["financial_calculations"]
+    assert len(calcs) > 0
+    for calc in calcs:
+        assert calc["verified"] is False
+        assert "MOCK" in calc.get("explanation", "")
+        assert calc.get("metadata", {}).get("mock") is True
+
+    # 3. Mock judges do not imply real audits succeeded
+    reviews = result_data["judge_reviews"]
+    assert len(reviews) > 0
+    for review in reviews:
+        assert review["passed"] is False
+        assert review["verdict"] == "unresolved"
+        assert review["score"] is None
+        assert "MOCK" in review["reasoning"]
+
+    # 4. Mock claims are unevaluated without fabricated confidence
+    claims = result_data["claims"]
+    assert len(claims) > 0
+    for claim in claims:
+        assert claim["status"] == "not_evaluated"
+        assert claim["confidence"] is None
+        for role, verdict in claim["judge_verdicts"].items():
+            assert verdict == "unresolved"
